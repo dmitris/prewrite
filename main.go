@@ -4,6 +4,9 @@
 //
 // Author: Dmitry Savintsev <dsavints@yahoo-inc.com>
 
+// prewrite tool to rewrite import paths and package import comments for vendoring
+// by adding or removing a given path prefix. The files are rewritten
+// in-place with no backup (expectation is that version control is used), the output is gofmt'ed.
 package main
 
 import (
