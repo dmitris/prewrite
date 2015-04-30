@@ -8,12 +8,9 @@ package astmod
 
 import (
 	"io/ioutil"
-	"os"
 	"testing"
 )
 
-// TODO: change for OSS!
-const pkgname = "go.corp.yahoo.com/dsavints/prewrite/astmod"
 const prefix = `go.corp.example.com/x`
 
 var input map[string]string
@@ -22,8 +19,7 @@ var helloworld, ext1, int1 string
 // init reads testdata files and puts them in the input map
 func init() {
 	input = make(map[string]string)
-	gopath := os.Getenv("GOPATH")
-	base := gopath + "/src/" + pkgname + "/testdata/"
+	base := "testdata/"
 	var err error
 	var b []byte
 	b, err = ioutil.ReadFile(base + "helloworld.go")
