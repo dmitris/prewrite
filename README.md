@@ -1,6 +1,8 @@
 prewrite
 ========
 
+[![Build Status](https://travis-ci.org/dmitris/prewrite.svg?branch=master)](https://travis-ci.org/dmitris/prewrite)
+
 Tool to rewrite import paths and [package import comments](https://golang.org/s/go14customimport) for vendoring by adding or removing a given path prefix.  The files are rewritten in-place with no backup (expectation is that version control is used), the output is gofmt'ed.
 
 # Install
