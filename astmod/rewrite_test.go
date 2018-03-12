@@ -11,90 +11,72 @@ import (
 	"testing"
 )
 
-const prefix = `go.corp.example.com/x`
-
-var input map[string]string
-var helloworld, ext1, int1 string
-
-// init reads testdata files and puts them in the input map
-func init() {
-	input = make(map[string]string)
-	base := "testdata/"
-	var err error
-	var b []byte
-	b, err = ioutil.ReadFile(base + "helloworld.go")
-	if err != nil {
-		panic(err)
-	}
-	input["helloworld"] = string(b)
-
-	b, err = ioutil.ReadFile(base + "int1.go")
-	if err != nil {
-		panic(err)
-	}
-	input["int1"] = string(b)
-
-	b, err = ioutil.ReadFile(base + "ext1.go")
-	if err != nil {
-		panic(err)
-	}
-	input["ext1"] = string(b)
-}
+const (
+	from = `go.corp.company.com`
+	to   = `go.newcompany.com`
+)
 
 // tests table
 var tests = []struct {
-	in      string
-	remove  bool
-	wanted  string
+	file    string
+	from    string
+	to      string
+	want    string
 	changed bool
 	label   string
 }{
-	{in: "ext1",
-		remove:  false,
-		wanted:  "int1",
+	{
+		file:    "testdata/ext1.go",
+		from:    "go.corp.example.com",
+		to:      "go.newcompany.com",
+		want:    "testdata/int1.go",
 		changed: true,
 		label:   "ext1",
 	},
-	{in: "int1",
-		remove:  true,
-		wanted:  "ext1",
-		changed: true,
+	{
+		file:    "testdata/int1.go",
+		from:    "go.corp.example.com",
+		to:      "go.newcompany.com",
+		want:    "testdata/int1.go",
+		changed: false,
 		label:   "int1",
 	},
-	// try to call rewrite on the file that has already been rewritten - expect a no-op
-	{in: "int1",
-		remove:  false,
-		wanted:  "int1",
-		changed: false,
-		label:   "int1-noop",
-	},
-	{in: "helloworld",
-		remove:  false,
-		wanted:  "helloworld",
+	{
+		file:    "testdata/helloworld.go",
+		from:    "go.corp.example.com",
+		to:      "go.newcompany.com",
+		want:    "testdata/helloworld.go",
 		changed: false,
 		label:   "unmodified",
 	},
 }
 
 func TestRewrite(t *testing.T) {
-	for _, test := range tests {
-		buf, err := Rewrite(test.label, input[test.in], prefix, test.remove)
+	for _, tt := range tests {
+		in, err := ioutil.ReadFile(tt.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		wantBytes, err := ioutil.ReadFile(tt.want)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := string(wantBytes)
+		buf, err := Rewrite(tt.label, in, from, to)
 		if err != nil {
 			t.Error(err)
-		}
-		// nil buf means no changes - expect test.changed be false
-		if buf == nil {
-			if test.changed == true {
-				t.Errorf("Error in %s - buf is nil but test.changed is true", test.label)
-			}
 			continue
 		}
-		if buf != nil && test.changed == false {
-			t.Errorf("Error in %s - buf is non-nil but test.changed is false", test.label)
+		if buf == nil {
+			if tt.changed == false {
+				continue // OK - no changes were made, as expected
+			}
+			t.Errorf("test '%s': changes expected but none made (buf=nil)", tt.label)
+			continue
 		}
-		if buf.String() != input[test.wanted] {
-			t.Errorf("Error in %s: Input:\n%s\n, Got:\n%s\nWanted:\n%s\nremove: %t\n",
-				test.label, input[test.in], buf.String(), input[test.wanted], test.remove)
+		got := buf.String()
+		if got != want {
+			t.Errorf("%s case: got\n%s\nwant contents of %s:\n%s", tt.label, got, tt.want, want)
 		}
 	}
 }
