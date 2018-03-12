@@ -22,7 +22,7 @@ import (
 // (The type of the argument for the src parameter must be string, []byte, or io.Reader.)
 //
 // return of nil, nil (no result, no error) means no changes are needed
-func Rewrite(fname string, src interface{}, prefix string, remove bool) (buf *bytes.Buffer, err error) {
+func Rewrite(fname string, src interface{}, from, to string) (buf *bytes.Buffer, err error) {
 	// Create the AST by parsing src.
 	fset := token.NewFileSet() // positions are relative to fset
 	f, err := parser.ParseFile(fset, fname, src, parser.ParseComments)
@@ -30,17 +30,13 @@ func Rewrite(fname string, src interface{}, prefix string, remove bool) (buf *by
 		log.Printf("Error parsing file %s, source: [%s], error: %s", fname, src, err)
 		return nil, err
 	}
-	// normalize the prefix ending with a trailing slash
-	if prefix[len(prefix)-1] != '/' {
-		prefix += "/"
-	}
 
-	changed, err := RewriteImports(f, prefix, remove)
+	changed, err := RewriteImports(f, from, to)
 	if err != nil {
 		log.Printf("Error rewriting imports in the AST: file %s - %s", fname, err)
 		return nil, err
 	}
-	changed2, err := RewriteImportComments(f, fset, prefix, remove)
+	changed2, err := RewriteImportComments(f, fset, from, to)
 	if err != nil {
 		log.Printf("Error rewriting import comments in the AST: file %s - %s", fname, err)
 		return nil, err
@@ -55,8 +51,8 @@ func Rewrite(fname string, src interface{}, prefix string, remove bool) (buf *by
 
 // RewriteImports rewrites imports in the passed AST (in-place).
 // It returns bool changed set to true if any changes were made
-// and non-nil err on error
-func RewriteImports(f *ast.File, prefix string, remove bool) (changed bool, err error) {
+// and non-nil err on error.
+func RewriteImports(f *ast.File, from, to string) (changed bool, err error) {
 	for _, impNode := range f.Imports {
 		imp, err := strconv.Unquote(impNode.Path.Value)
 		if err != nil {
@@ -67,24 +63,18 @@ func RewriteImports(f *ast.File, prefix string, remove bool) (changed bool, err 
 		if !strings.Contains(imp, ".") || strings.HasPrefix(imp, ".") {
 			continue
 		}
-		if remove {
-			if strings.HasPrefix(imp, prefix) {
-				changed = true
-				impNode.Path.Value = strconv.Quote(imp[len(prefix):])
-			}
-		} else {
-			// if import does not start with the prefix already, add it
-			if !strings.HasPrefix(imp, prefix) {
-				changed = true
-				impNode.Path.Value = strconv.Quote(prefix + imp)
-			}
+
+		if strings.HasPrefix(imp, from) {
+			changed = true
+			newimp := strings.Replace(impNode.Path.Value, from, to, 1)
+			impNode.Path.Value = newimp
 		}
 	}
 	return
 }
 
 // RewriteImportComments rewrites package import comments (https://golang.org/s/go14customimport)
-func RewriteImportComments(f *ast.File, fset *token.FileSet, prefix string, remove bool) (changed bool, err error) {
+func RewriteImportComments(f *ast.File, fset *token.FileSet, from, to string) (changed bool, err error) {
 	pkgpos := fset.Position(f.Package)
 	// Print the AST.
 	// ast.Print(fset, f)
@@ -103,26 +93,12 @@ func RewriteImportComments(f *ast.File, fset *token.FileSet, prefix string, remo
 		if err != nil {
 			log.Fatalf("Error unquoting import value [%v] - %s\n", parts[1], err)
 		}
-
-		if remove {
-			// the prefix is not there = nothing to remove, keep the comment
-			if !strings.HasPrefix(oldimp, prefix) {
-				newcommentgroups = append(newcommentgroups, c)
-				continue
-			}
-		} else {
-			// the prefix is already in the import path, keep the comment
-			if strings.HasPrefix(oldimp, prefix) {
-				newcommentgroups = append(newcommentgroups, c)
-				continue
-			}
+		// if the prefix is not there = nothing to remove, keep the comment
+		if !strings.HasPrefix(oldimp, from) {
+			newcommentgroups = append(newcommentgroups, c)
+			continue
 		}
-		newimp := ""
-		if remove {
-			newimp = oldimp[len(prefix):]
-		} else {
-			newimp = prefix + oldimp
-		}
+		newimp := strings.Replace(oldimp, from, to, 1)
 		changed = true
 		c2 := ast.Comment{Slash: c.Pos(), Text: `// import ` + strconv.Quote(newimp)}
 		cg := ast.CommentGroup{List: []*ast.Comment{&c2}}

@@ -2,10 +2,10 @@
 // Use of this source code is governed by a MIT
 // license that can be found in the LICENSE file.
 //
-// Author: Dmitry Savintsev <dsavints@yahoo-inc.com>
+// Author: Dmitry Savintsev <dsavints@oath.com>
 
 // prewrite tool to rewrite import paths and package import comments for vendoring
-// by adding or removing a given path prefix. The files are rewritten
+// by modifying the given path prefix. The files are rewritten
 // in-place with no backup (expectation is that version control is used), the output is gofmt'ed.
 package main
 
@@ -22,24 +22,27 @@ import (
 )
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: prewrite [flags] [path ...]\n")
+	fmt.Fprintf(os.Stderr, "usage: prewrite [flags] [path]\n")
 	flag.PrintDefaults()
 	os.Exit(2)
 }
 
 func main() {
-	prefix := flag.String("p", "", "package path prefix to prepend to imports (or to remove from imports with -r option)")
-	remove := flag.Bool("r", false, "remove the prefix from import paths")
 	verbose := flag.Bool("v", false, "verbose")
+	from := flag.String("from", "", "package path prefix to replace with the one given in the 'to' parameter")
+	to := flag.String("to", "", "package path prefix to replace the one given in the 'from' parameter")
 	flag.Usage = usage
 	flag.Parse()
-	if *prefix == "" {
+	if *from == "" || *to == "" {
 		usage()
 		os.Exit(1)
 	}
-	// add trailing slash if not already there
-	if (*prefix)[len(*prefix)-1] != '/' {
-		*prefix += "/"
+	// add trailing slashes if not already there
+	if (*from)[len(*from)-1] != '/' {
+		*from += "/"
+	}
+	if (*to)[len(*to)-1] != '/' {
+		*to += "/"
 	}
 	var root string
 	var err error
@@ -51,7 +54,7 @@ func main() {
 	} else {
 		root = flag.Arg(0)
 	}
-	processor := makeVisitor(*prefix, *remove, *verbose)
+	processor := makeVisitor(*from, *to, *verbose)
 	_, err = os.Stat(root)
 	if err != nil && os.IsNotExist(err) {
 		log.Fatalf("Error - the traversal root %s does not exist, please double-check\n", root)
@@ -64,7 +67,7 @@ func main() {
 }
 
 // makeVisitor returns a rewriting function with parameters bound with a closure
-func makeVisitor(prefix string, remove bool, verbose bool) filepath.WalkFunc {
+func makeVisitor(from, to string, verbose bool) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") {
 			return nil
@@ -77,7 +80,7 @@ func makeVisitor(prefix string, remove bool, verbose bool) filepath.WalkFunc {
 		if err != nil {
 			log.Fatalf("Fatal error reading file %s\n", path)
 		}
-		buf, err := astmod.Rewrite(path, src, prefix, remove)
+		buf, err := astmod.Rewrite(path, src, from, to)
 		if err != nil {
 			log.Fatalf("Fatal error rewriting AST, file %s - error: %s\n", path, err)
 		}
