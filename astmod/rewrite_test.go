@@ -8,93 +8,70 @@ package astmod
 
 import (
 	"io/ioutil"
+	"path/filepath"
 	"testing"
 )
 
 const prefix = `go.corp.example.com/x`
 
-var input map[string]string
-var helloworld, ext1, int1 string
-
-// init reads testdata files and puts them in the input map
-func init() {
-	input = make(map[string]string)
-	base := "testdata/"
-	var err error
-	var b []byte
-	b, err = ioutil.ReadFile(base + "helloworld.go")
-	if err != nil {
-		panic(err)
-	}
-	input["helloworld"] = string(b)
-
-	b, err = ioutil.ReadFile(base + "int1.go")
-	if err != nil {
-		panic(err)
-	}
-	input["int1"] = string(b)
-
-	b, err = ioutil.ReadFile(base + "ext1.go")
-	if err != nil {
-		panic(err)
-	}
-	input["ext1"] = string(b)
-}
-
 // tests table
 var tests = []struct {
 	in      string
-	remove  bool
+	from    string
+	to      string
 	wanted  string
 	changed bool
 	label   string
 }{
-	{in: "ext1",
-		remove:  false,
-		wanted:  "int1",
+	{in: "ext1.go",
+		from:    "github.com",
+		to:      "gitlab.com",
 		changed: true,
 		label:   "ext1",
 	},
-	{in: "int1",
-		remove:  true,
-		wanted:  "ext1",
+	{in: "helloworld.go",
+		from:    "github.com",
+		to:      "gitlab.com",
+		changed: false,
+		label:   "helloworld",
+	},
+	{in: "int1.go",
+		from:    "go.corp.example.com",
+		to:      "go.brandnewcorp.com",
 		changed: true,
 		label:   "int1",
-	},
-	// try to call rewrite on the file that has already been rewritten - expect a no-op
-	{in: "int1",
-		remove:  false,
-		wanted:  "int1",
-		changed: false,
-		label:   "int1-noop",
-	},
-	{in: "helloworld",
-		remove:  false,
-		wanted:  "helloworld",
-		changed: false,
-		label:   "unmodified",
 	},
 }
 
 func TestRewrite(t *testing.T) {
-	for _, test := range tests {
-		buf, err := Rewrite(test.label, input[test.in], prefix, test.remove)
+	for _, tt := range tests {
+		fname := filepath.Join("testdata", tt.in)
+		inp, err := ioutil.ReadFile(fname)
+		if err != nil {
+			t.Fatalf("unable to read input file %s: %v", fname, err)
+		}
+		buf, err := Rewrite(tt.label, inp, tt.from, tt.to)
 		if err != nil {
 			t.Error(err)
 		}
 		// nil buf means no changes - expect test.changed be false
 		if buf == nil {
-			if test.changed == true {
-				t.Errorf("Error in %s - buf is nil but test.changed is true", test.label)
+			if tt.changed == true {
+				t.Errorf("Error in %s - buf is nil but test.changed is true", tt.label)
 			}
 			continue
 		}
-		if buf != nil && test.changed == false {
-			t.Errorf("Error in %s - buf is non-nil but test.changed is false", test.label)
+		if buf != nil && tt.changed == false {
+			t.Errorf("Error in %s - buf is non-nil but test.changed is false", tt.label)
 		}
-		if buf.String() != input[test.wanted] {
-			t.Errorf("Error in %s: Input:\n%s\n, Got:\n%s\nWanted:\n%s\nremove: %t\n",
-				test.label, input[test.in], buf.String(), input[test.wanted], test.remove)
+		b, err := ioutil.ReadFile(fname + ".golden")
+		if err != nil {
+			t.Fatalf("unable to read golden file for %s: %v", fname, err)
+		}
+		want := string(b)
+		if buf.String() != want {
+			t.Errorf("Error in %s: Input:\n%s\n, Got:\n%s\nWanted:\n%s",
+				tt.label, string(inp), buf.String(), want)
 		}
 	}
 }
