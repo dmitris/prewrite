@@ -4,9 +4,10 @@
 //
 // Author: Dmitry Savintsev <dsavints@yahoo-inc.com>
 
-// prewrite tool to rewrite import paths and package import comments for vendoring
+// prewrite tool rewrites import paths and package import comments for vendoring
 // by adding or removing a given path prefix. The files are rewritten
-// in-place with no backup (expectation is that version control is used), the output is gofmt'ed.
+// in-place with no backup (expectation is that version control is used),
+// the output is gofmt'ed.
 package main
 
 import (
@@ -28,19 +29,15 @@ func usage() {
 }
 
 func main() {
-	prefix := flag.String("p", "", "package path prefix to prepend to imports (or to remove from imports with -r option)")
-	remove := flag.Bool("r", false, "remove the prefix from import paths")
-	verbose := flag.Bool("v", false, "verbose")
+	fromOpt := flag.String("from", "", "old prefix to be changed")
+	toOpt := flag.String("to", "", "new prefix to add instead of the old onw")
+	verboseOpt := flag.Bool("v", false, "verbose")
 	flag.Usage = usage
 	flag.Parse()
-	if *prefix == "" {
-		usage()
-		os.Exit(1)
-	}
-	// add trailing slash if not already there
-	if (*prefix)[len(*prefix)-1] != '/' {
-		*prefix += "/"
-	}
+	fromPrefix := *fromOpt
+	toPrefix := *toOpt
+	verbose := *verboseOpt
+
 	var root string
 	var err error
 	if len(flag.Args()) < 1 {
@@ -51,7 +48,22 @@ func main() {
 	} else {
 		root = flag.Arg(0)
 	}
-	processor := makeVisitor(*prefix, *remove, *verbose)
+
+	log.Printf("from %s to %s", fromPrefix, toPrefix)
+	if fromPrefix == "" || toPrefix == "" {
+		usage()
+		os.Exit(1)
+	}
+
+	// add trailing slash if not already there
+	if fromPrefix[len(fromPrefix)-1] != '/' {
+		fromPrefix += "/"
+	}
+	if toPrefix[len(toPrefix)-1] != '/' {
+		toPrefix += "/"
+	}
+
+	processor := makeVisitor(fromPrefix, toPrefix, verbose)
 	_, err = os.Stat(root)
 	if err != nil && os.IsNotExist(err) {
 		log.Fatalf("Error - the traversal root %s does not exist, please double-check\n", root)
@@ -64,7 +76,7 @@ func main() {
 }
 
 // makeVisitor returns a rewriting function with parameters bound with a closure
-func makeVisitor(prefix string, remove bool, verbose bool) filepath.WalkFunc {
+func makeVisitor(from, to string, verbose bool) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() || !strings.HasSuffix(f.Name(), ".go") {
 			return nil
@@ -77,7 +89,7 @@ func makeVisitor(prefix string, remove bool, verbose bool) filepath.WalkFunc {
 		if err != nil {
 			log.Fatalf("Fatal error reading file %s\n", path)
 		}
-		buf, err := astmod.Rewrite(path, src, prefix, remove)
+		buf, err := astmod.Rewrite(path, src, from, to)
 		if err != nil {
 			log.Fatalf("Fatal error rewriting AST, file %s - error: %s\n", path, err)
 		}

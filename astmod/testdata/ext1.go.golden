@@ -1,7 +1,7 @@
 // package doc comment for github.com/foo/bar
 package bar
 
-import _ "github.com/abc/xyz"
+import _ "gitlab.com/abc/xyz"
 
 func Bar() {
 	// unrelated comment in func

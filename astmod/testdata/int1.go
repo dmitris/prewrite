@@ -1,7 +1,7 @@
 // package doc comment for github.com/foo/bar
-package bar // import "go.corp.example.com/x/github.com/foo/bar"
+package bar
 
-import _ "go.corp.example.com/x/github.com/abc/xyz"
+import _ "go.corp.example.com/abc/xyz"
 
 func Bar() {
 	// unrelated comment in func
